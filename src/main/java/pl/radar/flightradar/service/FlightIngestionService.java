@@ -24,7 +24,7 @@ public class FlightIngestionService {
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final OpenSkyAuthService authService;
 
-    @Scheduled(fixedRate = 10000)
+    @Scheduled(fixedRate = 3000)
     public void getData() {
 
         Mono<OpenSkyResponse> skyResponseMono = authService.getAccessToken()
