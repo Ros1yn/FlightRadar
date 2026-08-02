@@ -47,7 +47,7 @@ A real-time flight tracking web app focused on Polish airspace. The backend fetc
 
 1. Clone the repository:
 ```bash
-git clone <repo-url>
+git clone https://github.com/Ros1yn/FlightRadar/tree/master
 ```
 2. Set your OpenSky API credentials in src/main/resources/application.properties:
 ```Properties
