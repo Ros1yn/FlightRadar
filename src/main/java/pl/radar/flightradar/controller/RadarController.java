@@ -4,11 +4,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
-public class RadarViewController {
+public class RadarController {
 
-    @GetMapping("/radar")
-    public String showRadar() {
-        return "radar";
+    @GetMapping("/")
+    public String showRadarMap() {
+        return "index";
     }
-
 }

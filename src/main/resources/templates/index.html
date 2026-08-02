@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pl" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Flight Radar</title>
+
+    <!-- Linkowanie CSS za pomocą silnika Thymeleaf -->
+    <link rel="stylesheet" th:href="@{style.css}">
+
+    <!-- Biblioteki mapy Leaflet (Zewnętrzne CDN zostają bez zmian) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Biblioteki WebSocket / STOMP -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body>
+
+<!-- Panel HUD nakładający się na mapę -->
+<div id="hud">
+    <h2>Polska Kontrola Lotów</h2>
+    <div class="stat-row">
+        <span>Status serwera:</span>
+        <span><span id="conn-indicator" class="status-indicator"></span><span id="conn-text">Łączenie...</span></span>
+    </div>
+    <div class="stat-row">
+        <span>Widoczne samoloty:</span>
+        <strong id="flight-count">0</strong>
+    </div>
+</div>
+
+<!-- Pojemnik na mapę -->
+<div id="map"></div>
+
+<script>
+    const map = L.map('map').setView([52.0, 19.0], 6);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
+        maxZoom: 19
+    }).addTo(map);
+
+    const planeMarkers = {};
+
+    const customIcon = L.divIcon({
+        className: 'plane-marker',
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+    });
+
+    let socket = new SockJS('/ws');
+    let stompClient = Stomp.over(socket);
+
+    stompClient.debug = null;
+
+    stompClient.connect({}, function (frame) {
+        document.getElementById('conn-indicator').classList.add('connected');
+        document.getElementById('conn-text').innerText = 'Połączono';
+
+        stompClient.subscribe('/topic/flights', function (message) {
+            let flights = JSON.parse(message.body);
+
+            document.getElementById('flight-count').innerText = flights.length;
+
+            const currentBatchIcaos = new Set();
+
+            flights.forEach(flight => {
+                if (!flight.latitude || !flight.longitude) return;
+
+                currentBatchIcaos.add(flight.icao24);
+
+                let latlng = [flight.latitude, flight.longitude];
+
+                // Bezpieczne pobranie callsignu, żeby uniknąć 'null' na mapie
+                let callsignText = (flight.callsign && flight.callsign.trim() !== '') ? flight.callsign.trim() : 'N/A';
+
+                // Budujemy dynamiczną ikonę z grafiką SVG dla każdego samolotu z osobna
+                // Zabezpieczenie na wypadek braku danych o kącie
+                let trackAngle = flight.trueTrack !== undefined ? flight.trueTrack : 0;
+
+                let dynamicIcon = L.divIcon({
+                    className: 'custom-plane-icon',
+                    html: `
+                            <div class="flight-label">${callsignText}</div>
+                            <!-- Obrót grafiki SVG o podany kąt -->
+                            <svg class="plane-svg" style="transform: rotate(${trackAngle}deg);" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#00E5FF" d="M21,16v-2l-8-5V3.5C13,2.67 12.33,2 11.5,2S10,2.67 10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1l3.5,1v-1.5L13,19v-5.5L21,16z"/>
+                            </svg>
+                        `,
+                    iconSize: [60, 60],
+                    iconAnchor: [30, 30]
+                });
+
+                let popupContent = `
+                        <div style="font-family: sans-serif; min-width: 150px;">
+                            <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px;">${callsignText}</h3>
+                            <b>ICAO24:</b> ${flight.icao24}<br>
+                            <b>Kraj:</b> ${flight.originCountry}<br>
+                            <b>Wysokość:</b> ${flight.altitudeBaro} m<br>
+                            <b>Prędkość:</b> ${flight.velocity} m/s
+                        </div>
+                    `;
+
+                if (planeMarkers[flight.icao24]) {
+                    // Jeśli marker istnieje, aktualizujemy jego pozycję i odświeżamy widok ikony/podpisu
+                    planeMarkers[flight.icao24].setLatLng(latlng);
+                    planeMarkers[flight.icao24].setIcon(dynamicIcon);
+                    planeMarkers[flight.icao24].getPopup().setContent(popupContent);
+                } else {
+                    // Tworzymy całkowicie nowy marker z nową ikoną
+                    let marker = L.marker(latlng, { icon: dynamicIcon })
+                        .bindPopup(popupContent)
+                        .addTo(map);
+
+                    planeMarkers[flight.icao24] = marker;
+                }
+            });
+
+            Object.keys(planeMarkers).forEach(icao => {
+                if (!currentBatchIcaos.has(icao)) {
+                    map.removeLayer(planeMarkers[icao]);
+                    delete planeMarkers[icao];
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>

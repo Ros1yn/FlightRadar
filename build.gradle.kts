@@ -26,6 +26,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webflux:4.1.0")
     implementation("org.springframework.boot:spring-boot-starter-data-redis:4.1.0")
     implementation("org.springframework.boot:spring-boot-starter-websocket:4.1.0")
+    implementation ("org.springframework.boot:spring-boot-starter-thymeleaf")
 
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
